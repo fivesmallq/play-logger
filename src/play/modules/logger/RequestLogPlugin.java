@@ -1,39 +1,40 @@
 package play.modules.logger;
 
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.Play;
 import play.PlayPlugin;
 import play.mvc.Http;
 import play.mvc.Scope;
-import play.mvc.results.*;
 import play.mvc.results.Error;
+import play.mvc.results.*;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 import static java.lang.System.currentTimeMillis;
 import static java.util.Arrays.asList;
-import static java.util.stream.Collectors.joining;
 
 public class RequestLogPlugin extends PlayPlugin {
   private static final String REQUEST_ID_PREFIX = Integer.toHexString((int)(Math.random() * 0x1000));
   private static final AtomicInteger counter = new AtomicInteger(1);
   private static final Logger logger = LoggerFactory.getLogger("request");
+  private static ResultOutput resultOutput;
 
   private static final String LOG_AS_PATH = Play.configuration.getProperty("request.log.pathForAction", "Web.");
-  
-  @Override public void onConfigurationRead() {
+  private static final String RESULT_OUTPUT = Play.configuration.getProperty("request.log.output", "play.modules.logger.APIResultOutput");
+
+    @Override public void onConfigurationRead() {
     initMaskedParams();
+    initResultOutput();
   }
 
-  @Override public void routeRequest(Http.Request request) {
+    @Override public void routeRequest(Http.Request request) {
     request.args.put("startTime", currentTimeMillis());
     request.args.put("requestId", REQUEST_ID_PREFIX + "-" + counter.incrementAndGet());
   }
@@ -85,29 +86,11 @@ public class RequestLogPlugin extends PlayPlugin {
 
   static String result(Result result) {
     return result == null ? "RenderError" :
-           result instanceof Redirect ? toString((Redirect) result) :
-           result instanceof RenderTemplate ? toString((RenderTemplate) result) :
-           result instanceof RenderBinary ? toString((RenderBinary) result) :
-           result instanceof Error ? toString((Error) result) :
+           result instanceof Redirect ? resultOutput.toString((Redirect) result) :
+           result instanceof RenderTemplate ? resultOutput.toString((RenderTemplate) result) :
+           result instanceof RenderBinary ? resultOutput.toString((RenderBinary) result) :
+           result instanceof Error ? resultOutput.toString((Error) result) :
            result.getClass().getSimpleName();
-  }
-
-  private static String toString(Redirect result) {
-    return result.getClass().getSimpleName() + ' ' + result.url;
-  }
-
-  private static String toString(RenderTemplate result) {
-    return "RenderTemplate " + result.getName() + " " + result.getRenderTime() + " ms";
-  }
-
-  private static String toString(RenderBinary result) {
-    return Stream.of(result.getClass().getSimpleName(), result.getName(), result.getContentType())
-        .filter(StringUtils::isNotEmpty)
-        .collect(joining(" "));
-  }
-
-  private static String toString(Error result) {
-    return result.getClass().getSimpleName() + " \"" + result.getMessage() + "\"";
   }
 
   static String getRequestLogCustomData(Http.Request request) {
@@ -122,6 +105,18 @@ public class RequestLogPlugin extends PlayPlugin {
 
   private static final Set<String> MASKED_PARAMS = new HashSet<>();
 
+  private void initResultOutput() {
+    Class<?> clazz;
+    try {
+       clazz = Class.forName(RESULT_OUTPUT);
+       Constructor<?> ctor = clazz.getConstructor();
+       Object object = ctor.newInstance();
+       resultOutput= (ResultOutput) object;
+    } catch (Exception e) {
+       logger.warn("init result output class error! class: {}",RESULT_OUTPUT);
+       resultOutput=new DefaultResultOutput();
+    }
+  }
   private static void initMaskedParams() {
     String maskedParamsString = Play.configuration.getProperty("request.log.maskParams", "password|cvv|cardNumber|card.cvv|card.number");
     for (String param : maskedParamsString.split("\\|")) MASKED_PARAMS.add(param.toLowerCase().trim());

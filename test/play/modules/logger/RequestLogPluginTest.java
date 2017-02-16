@@ -163,12 +163,12 @@ public class RequestLogPluginTest {
   
   @Test
   public void logsReason_forError() {
-    Forbidden forbidden = new Forbidden("User signature not valid!");
-    assertEquals("Forbidden \"User signature not valid!\"", RequestLogPlugin.result(forbidden));
-    BadRequest badRequest = new BadRequest("input error!");
-    assertEquals("BadRequest \"input error!\"", RequestLogPlugin.result(badRequest));
-    EvilRequest evilRequest=new EvilRequest("evil request");
-    assertEquals("EvilRequest \"evil request\"", RequestLogPlugin.result(evilRequest));
+    Forbidden forbidden = new Forbidden("{\"code\":1000, \"message\":\"forbidden\"}");
+    assertEquals("Forbidden 1000 \"forbidden\"", RequestLogPlugin.result(forbidden));
+    BadRequest badRequest = new BadRequest("{\"code\":1000, \"message\":\"badrequest\"}");
+    assertEquals("BadRequest 1000 \"badrequest\"", RequestLogPlugin.result(badRequest));
+    EvilRequest evilRequest=new EvilRequest("{\"code\":1000, \"message\":\"evilrequest\"}");
+    assertEquals("EvilRequest 1000 \"evilrequest\"", RequestLogPlugin.result(evilRequest));
   }
 
   private void setQueryString(String params) {
